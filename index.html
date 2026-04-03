@@ -81,13 +81,24 @@
           </div>
 
           <div class="table-row">
+            <div class="table-cell"><label>Color mode:</label></div>
+            <div class="table-cell">
+              <input type="radio" id="colorModeMonochrome" name="colorMode" value="monochrome" onchange="updateColorMode(this)" checked />
+              <label for="colorModeMonochrome">Monochrome (1-bit)</label>
+              <input type="radio" id="colorModeRgb565" name="colorMode" value="rgb565" onchange="updateColorMode(this)" />
+              <label for="colorModeRgb565">RGB565 (16-bit color)</label>
+              <div class="note"><i>RGB565 forces draw mode to Horizontal 565 and shows color preview.</i></div>
+            </div>
+          </div>
+
+          <div class="table-row">
             <div class="table-cell"><label for="invertColors">Invert image colors</label></div>
             <div class="table-cell">
               <input id="invertColors" type="checkbox" onchange="updateBoolean('invertColors')" />
             </div>
           </div>
 
-          <div class="table-row">
+          <div class="table-row" id="dithering-row">
             <div class="table-cell"><label for="ditheringMode">Dithering: </label></div>
             <div class="table-cell">
               <select id="ditheringMode" onchange="updateInteger('ditheringMode')">
@@ -238,7 +249,6 @@
                 <option value="vertical1bit">Vertical - 1 bit per pixel</option>
                 <option value="horizontal565">Horizontal - 2 bytes per pixel (565)</option>
                 <option value="horizontalAlpha">Horizontal - 1 bit per pixel alpha map</option>
-                <option value="horizontal888">Horizontal - 3 bytes per pixel (rgb888</option>
                 <option value="horizontal888">Horizontal - 3 bytes per pixel (rgb888)</option>
               </select>
 
@@ -283,6 +293,8 @@
         <button type="button" class="generate-button" onclick="generateOutputString()">Generate code</button>
         <button type="button" id = "copy-button" onclick="copyOutput()">Copy Output</button>
         <button type="button" id = "download-button" onclick="downloadBinFile()">Download as binary file (.bin)</button>
+        <button type="button" id="download-c-button" onclick="downloadCFile()">Download as .c file</button>
+        <button type="button" id="download-h-button" onclick="downloadHFile()">Download as .h file</button>
         <textarea id="code-output" class="code-output"></textarea>
       </section>
     </section>

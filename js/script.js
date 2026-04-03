@@ -20,6 +20,7 @@ const settings = {
   outputFormat: 'plain',
   invertColors: false,
   rotation: 0,
+  colorMode: 'monochrome',
 };
 
 function bitswap(b) {
@@ -416,6 +417,11 @@ function placeImage(_image) {
     if (settings.invertColors) {
       invert(canvas, ctx);
     }
+  }
+
+  // RGB565 mode: quantize preview to show actual 565 color fidelity
+  if (settings.colorMode === 'rgb565' || settings.conversionFunction === ConversionFunctions.horizontal565) {
+    applyRgb565Preview(ctx, canvas.width, canvas.height);
   }
 
   if (settings.rotation !== 0) {
@@ -1052,6 +1058,81 @@ function downloadBinFile() {
   a.download = `${getIdentifier()}.bin`;
   a.click();
   window.URL.revokeObjectURL(url);
+}
+
+// Update color mode (monochrome / rgb565) and force draw mode accordingly
+// eslint-disable-next-line no-unused-vars
+function updateColorMode(elm) {
+  settings.colorMode = elm.value;
+  const drawModeSelect = document.getElementById('drawMode');
+  const ditheringRow = document.getElementById('dithering-row');
+  if (settings.colorMode === 'rgb565') {
+    // force drawMode to 565
+    drawModeSelect.value = 'horizontal565';
+    settings.conversionFunction = ConversionFunctions.horizontal565;
+    if (ditheringRow) ditheringRow.style.display = 'none';
+  } else {
+    // back to default monochrome
+    if (drawModeSelect.value === 'horizontal565') {
+      drawModeSelect.value = 'horizontal1bit';
+      settings.conversionFunction = ConversionFunctions.horizontal1bit;
+    }
+    if (ditheringRow) ditheringRow.style.display = '';
+  }
+  updateAllImages();
+}
+
+// Apply RGB565 quantization to a canvas for accurate color preview
+function applyRgb565Preview(ctx, width, height) {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const { data } = imageData;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    // quantize to RGB565 and back to RGB888
+    const r5 = (r >> 3) & 0x1F;
+    const g6 = (g >> 2) & 0x3F;
+    const b5 = (b >> 3) & 0x1F;
+    data[i] = (r5 << 3) | (r5 >> 2);
+    data[i + 1] = (g6 << 2) | (g6 >> 4);
+    data[i + 2] = (b5 << 3) | (b5 >> 2);
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// Download output as a .c source file
+// eslint-disable-next-line no-unused-vars
+function downloadCFile() {
+  const content = document.getElementById('code-output').value;
+  if (!content) { alert('Generate code first.'); return; }
+  const name = `${getIdentifier()}.c`;
+  const blob = new Blob([content], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.style = 'display: none';
+  document.body.appendChild(a);
+  a.href = window.URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  window.URL.revokeObjectURL(a.href);
+}
+
+// Download output as a .h header file
+// eslint-disable-next-line no-unused-vars
+function downloadHFile() {
+  const content = document.getElementById('code-output').value;
+  if (!content) { alert('Generate code first.'); return; }
+  const ident = getIdentifier().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+  const guard = `${ident}H`;
+  const header = `#ifndef ${guard}\n#define ${guard}\n\n#include <stdint.h>\n\n${content}\n\n#endif /* ${guard} */\n`;
+  const blob = new Blob([header], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.style = 'display: none';
+  document.body.appendChild(a);
+  a.href = window.URL.createObjectURL(blob);
+  a.download = `${getIdentifier()}.h`;
+  a.click();
+  window.URL.revokeObjectURL(a.href);
 }
 
 // eslint-disable-next-line no-unused-vars
