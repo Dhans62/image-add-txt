@@ -242,6 +242,12 @@ function Images() {
     const i = collection.indexOf(image);
     if (i !== -1) collection.splice(i, 1);
   };
+  this.move = (fromIndex, toIndex) => {
+    if (fromIndex < 0 || toIndex < 0 || fromIndex >= collection.length || toIndex >= collection.length) return;
+    const item = collection.splice(fromIndex, 1)[0];
+    collection.splice(toIndex, 0, item);
+  };
+  this.indexOf = (image) => collection.indexOf(image);
   this.each = (f) => { collection.forEach(f); };
   this.length = () => collection.length;
   this.first = () => collection[0];
@@ -266,6 +272,50 @@ const images = new Images();
 // const fileTypes = ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'svg'];
 // Variable name, when "arduino code" is required
 const identifier = 'myBitmap';
+
+// ── REORDER HELPERS ──────────────────────────────────────────────────────────
+
+// Sync DOM order (li list + canvas container + file-input-column entries) to match images collection
+function syncDomOrder() {
+  const imageSizeSettings = document.getElementById('image-size-settings');
+  const canvasContainer = document.getElementById('images-canvas-container');
+  const fileInputColumn = document.getElementById('file-input-column');
+
+  for (let i = 0; i < images.length(); i++) {
+    const imgObj = images.getByIndex(i);
+    const li = imageSizeSettings.querySelector(`li[data-key="${imgObj.entryKey}"]`);
+    const fe = fileInputColumn.querySelector(`.file-input-entry[data-key="${imgObj.entryKey}"]`);
+    if (li) imageSizeSettings.appendChild(li);
+    if (fe) fileInputColumn.appendChild(fe);
+    canvasContainer.appendChild(imgObj.canvas);
+  }
+  updateAllImages();
+}
+
+// Move an image up (-1) or down (+1) and sync DOM
+function moveImage(imgObj, delta) {
+  const idx = images.indexOf(imgObj);
+  const newIdx = idx + delta;
+  if (newIdx < 0 || newIdx >= images.length()) return;
+  images.move(idx, newIdx);
+  syncDomOrder();
+}
+
+// Sort all images alphabetically by glyph name
+// eslint-disable-next-line no-unused-vars
+function sortImagesByName() {
+  const n = images.length();
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = 0; j < n - i - 1; j++) {
+      if (images.getByIndex(j).glyph > images.getByIndex(j + 1).glyph) {
+        images.move(j, j + 1);
+      }
+    }
+  }
+  syncDomOrder();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Invert the colors of the canvas
 function invert(canvas, ctx) {
@@ -720,45 +770,43 @@ function allSameSize() {
 // Handle selecting an image with the file picker
 function handleImageSelection(evt) {
   const files = Array.from(evt.target.files);
-  files.sort((a, b) => a.name > b.name);
-  // error message
-  const onlyImagesFileError = document.getElementById('only-images-file-error');
 
-  onlyImagesFileError.style.display = 'none';
-
-  // initial message
-  const noFileSelected = document.querySelectorAll('.no-file-selected');
-  if (files.length > 0) {
-    noFileSelected.forEach((el) => {
-      // eslint-disable-next-line no-param-reassign
-      el.style.display = 'none';
-    });
-  } else {
-    noFileSelected.forEach((el) => {
-      // eslint-disable-next-line no-param-reassign
-      el.style.display = 'block';
-    });
+  const autoSort = document.getElementById('auto-sort-name');
+  if (autoSort && autoSort.checked) {
+    files.sort((a, b) => (a.name > b.name ? 1 : -1));
   }
 
-  for (let i = 0; files[i]; i++) {
-    // Only process image files.
+  const onlyImagesFileError = document.getElementById('only-images-file-error');
+  onlyImagesFileError.style.display = 'none';
+
+  const noFileSelected = document.querySelectorAll('.no-file-selected');
+  if (files.length > 0) {
+    noFileSelected.forEach((el) => { el.style.display = 'none'; }); // eslint-disable-line no-param-reassign
+  } else {
+    noFileSelected.forEach((el) => { el.style.display = 'block'; }); // eslint-disable-line no-param-reassign
+  }
+
+  for (let i = 0; i < files.length; i++) {
     if (!files[i].type.match('image.*')) {
       onlyImagesFileError.style.display = 'block';
-      // eslint-disable-next-line no-continue
-      continue;
+      continue; // eslint-disable-line no-continue
     }
 
     const reader = new FileReader();
 
     reader.onload = (file) => {
-      // eslint-disable-next-line no-param-reassign
-      file.name = reader.name;
-      // Render thumbnail.
+      file.name = reader.name; // eslint-disable-line no-param-reassign
       const img = new Image();
 
       img.onload = () => {
+        const glyphName = file.name.split('.')[0];
+        // unique key for DOM lookup — use timestamp+name to avoid collision
+        const entryKey = `${glyphName}_${Date.now()}`;
+
+        // ── file-input-column entry ──────────────────────────────────────
         const fileInputColumnEntry = document.createElement('div');
         fileInputColumnEntry.className = 'file-input-entry';
+        fileInputColumnEntry.setAttribute('data-key', entryKey);
 
         const fileInputColumnEntryLabel = document.createElement('span');
         fileInputColumnEntryLabel.textContent = file.name;
@@ -767,60 +815,50 @@ function handleImageSelection(evt) {
         fileInputColumnEntryRemoveButton.className = 'remove-button';
         fileInputColumnEntryRemoveButton.innerHTML = 'remove';
 
+        // ── canvas ───────────────────────────────────────────────────────
         const canvas = document.createElement('canvas');
 
+        // ── image-size-settings li ───────────────────────────────────────
         const imageEntry = document.createElement('li');
         imageEntry.setAttribute('data-img', file.name);
+        imageEntry.setAttribute('data-key', entryKey);
+        imageEntry.draggable = true;
+        imageEntry.style.cursor = 'grab';
 
         const w = document.createElement('input');
-        w.type = 'number';
-        w.name = 'width';
-        w.id = 'screenWidth';
-        w.min = 0;
-        w.className = 'size-input';
-        w.value = img.width;
+        w.type = 'number'; w.name = 'width'; w.id = 'screenWidth'; w.min = 0;
+        w.className = 'size-input'; w.value = img.width;
         settings.screenWidth = img.width;
-        w.oninput = () => {
-          canvas.width = this.value;
-          updateAllImages();
-          updateInteger('screenWidth');
-        };
+        w.oninput = () => { canvas.width = this.value; updateAllImages(); updateInteger('screenWidth'); };
 
         const h = document.createElement('input');
-        h.type = 'number';
-        h.name = 'height';
-        h.id = 'screenHeight';
-        h.min = 0;
-        h.className = 'size-input';
-        h.value = img.height;
+        h.type = 'number'; h.name = 'height'; h.id = 'screenHeight'; h.min = 0;
+        h.className = 'size-input'; h.value = img.height;
         settings.screenHeight = img.height;
-        h.oninput = () => {
-          canvas.height = this.value;
-          updateAllImages();
-          updateInteger('screenHeight');
-        };
+        h.oninput = () => { canvas.height = this.value; updateAllImages(); updateInteger('screenHeight'); };
 
         const gil = document.createElement('span');
-        gil.innerHTML = 'glyph';
-        gil.className = 'file-info';
+        gil.innerHTML = 'glyph'; gil.className = 'file-info';
 
         const gi = document.createElement('input');
-        gi.type = 'text';
-        gi.name = 'glyph';
-        gi.className = 'glyph-input';
-        gi.onchange = () => {
-          const image = images.get(img);
-          image.glyph = gi.value;
-        };
+        gi.type = 'text'; gi.name = 'glyph'; gi.className = 'glyph-input';
+        gi.onchange = () => { const image = images.get(img); image.glyph = gi.value; };
 
         const fn = document.createElement('span');
         fn.className = 'file-info';
-        fn.innerHTML = `${file.name} (file resolution: ${img.width} x ${img.height})`;
-        fn.innerHTML += '<br />';
+        fn.innerHTML = `${file.name} (file resolution: ${img.width} x ${img.height})<br />`;
 
         const rb = document.createElement('button');
-        rb.className = 'remove-button';
-        rb.innerHTML = 'remove';
+        rb.className = 'remove-button'; rb.innerHTML = 'remove';
+
+        // ── ▲▼ buttons ───────────────────────────────────────────────────
+        const btnUp = document.createElement('button');
+        btnUp.className = 'order-button'; btnUp.innerHTML = '▲'; btnUp.title = 'Move up';
+        btnUp.onclick = () => { moveImage(images.get(img), -1); };
+
+        const btnDown = document.createElement('button');
+        btnDown.className = 'order-button'; btnDown.innerHTML = '▼'; btnDown.title = 'Move down';
+        btnDown.onclick = () => { moveImage(images.get(img), 1); };
 
         const fileInputColumn = document.getElementById('file-input-column');
         const imageSizeSettings = document.getElementById('image-size-settings');
@@ -831,16 +869,13 @@ function handleImageSelection(evt) {
           canvasContainer.removeChild(image.canvas);
           images.remove(image);
           imageSizeSettings.removeChild(imageEntry);
-
           fileInputColumn.removeChild(fileInputColumnEntry);
-          if (imageSizeSettings.children.length <= 1) {
+          if (imageSizeSettings.querySelectorAll('li[data-key]').length <= 1) {
             document.getElementById('all-same-size').style.display = 'none';
           }
           if (images.length() === 0) {
-            noFileSelected.forEach((el) => {
-              // eslint-disable-next-line no-param-reassign
-              el.style.display = 'block';
-            });
+            noFileSelected.forEach((el) => { el.style.display = 'block'; }); // eslint-disable-line no-param-reassign
+            document.getElementById('sort-controls').style.display = 'none';
           }
           updateAllImages();
         };
@@ -848,6 +883,36 @@ function handleImageSelection(evt) {
         rb.onclick = removeButtonOnClick;
         fileInputColumnEntryRemoveButton.onclick = removeButtonOnClick;
 
+        // ── drag-and-drop ─────────────────────────────────────────────────
+        imageEntry.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', entryKey);
+          imageEntry.classList.add('dragging');
+        });
+        imageEntry.addEventListener('dragend', () => {
+          imageEntry.classList.remove('dragging');
+          imageSizeSettings.querySelectorAll('li').forEach((li) => li.classList.remove('drag-over'));
+        });
+        imageEntry.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          imageSizeSettings.querySelectorAll('li').forEach((li) => li.classList.remove('drag-over'));
+          imageEntry.classList.add('drag-over');
+        });
+        imageEntry.addEventListener('drop', (e) => {
+          e.preventDefault();
+          const fromKey = e.dataTransfer.getData('text/plain');
+          if (fromKey === entryKey) return;
+          let fromIdx = -1; let toIdx = -1;
+          for (let k = 0; k < images.length(); k++) {
+            if (images.getByIndex(k).entryKey === fromKey) fromIdx = k;
+            if (images.getByIndex(k).entryKey === entryKey) toIdx = k;
+          }
+          if (fromIdx === -1 || toIdx === -1) return;
+          images.move(fromIdx, toIdx);
+          syncDomOrder();
+          imageEntry.classList.remove('drag-over');
+        });
+
+        // ── assemble ──────────────────────────────────────────────────────
         fileInputColumnEntry.appendChild(fileInputColumnEntryLabel);
         fileInputColumnEntry.appendChild(fileInputColumnEntryRemoveButton);
         fileInputColumn.appendChild(fileInputColumnEntry);
@@ -858,15 +923,20 @@ function handleImageSelection(evt) {
         imageEntry.appendChild(h);
         imageEntry.appendChild(gil);
         imageEntry.appendChild(gi);
+        imageEntry.appendChild(btnUp);
+        imageEntry.appendChild(btnDown);
         imageEntry.appendChild(rb);
-
         imageSizeSettings.appendChild(imageEntry);
 
         canvas.width = img.width;
         canvas.height = img.height;
         canvasContainer.appendChild(canvas);
 
-        images.push(img, canvas, file.name.split('.')[0]);
+        images.push(img, canvas, glyphName);
+        // store entryKey on the imgObj for syncDomOrder lookup
+        images.last().entryKey = entryKey;
+
+        document.getElementById('sort-controls').style.display = 'block';
         if (images.length() > 1) {
           document.getElementById('all-same-size').style.display = 'block';
         }
