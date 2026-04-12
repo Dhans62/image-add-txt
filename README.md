@@ -1,6 +1,8 @@
 ## image2cpp
 
-An online version of this tool is live at [http://javl.github.io/image2cpp/](http://javl.github.io/image2cpp/)
+## https://dhans62.github.io/image-add-txt/
+
+###### Source: [http://javl.github.io/image2cpp/](http://javl.github.io/image2cpp/)
 
 
 image2cpp is a simple tool to change images into byte arrays (or your array back into an image) for use with (monochrome) displays suchs as OLEDs, like those from Adafruit or Sparkfun. While searching for a way to generate these arrays, I mostly found links to a piece of Windows software. Both the flakey results and the hassle of having to boot a virtual machine just to convert an image lead to me writing this pure html + javascript solution.
