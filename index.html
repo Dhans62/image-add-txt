@@ -1,312 +1,601 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>image2cpp</title>
-  <script src="./js/dithering.js" defer></script>
-  <script src="./js/script.js" defer></script>
-  <link rel="stylesheet" href="./css/style.css">
-</head>
-<body>
-  <div class="wrapper">
-    <section class="section">
-      <h1>image2cpp</h1>
-      <p><strong>image2cpp</strong> is a simple tool to change images into byte arrays (or arrays back into an images) for use with (monochrome) displays such as OLEDs on your Arduino or Raspberry Pi.<br>
-        It was originally made to work with the Adafruit OLED library (for which your can find an example sketch for Arduino <a href="https://github.com/javl/image2cpp/blob/master/oled_example/oled_example.ino" target="_blank">here</a>) but
-        has been expanded by the community to be useful in all kind of (embedded) projects.</p>
-      <p>More info (and credits) can be found in the <a href="https://github.com/javl/image2cpp" target="_blank">Github repository</a>. This is also where you can report any <a href="https://github.com/javl/image2cpp/issues" target="_blank">issues</a> you might come across.</p>
-      <p class="sp-block">
-        Did you find this tool useful? Feel free to support my open source software on Github, especially if used commercially.<br />
-        <a href="https://github.com/sponsors/javl" target="_blank">
-          <img src="https://img.shields.io/github/sponsors/javl?label=Sponsor&logo=GitHub" alt="GitHub Sponsor">
-        </a>
-        <a href="https://www.buymeacoffee.com/javl" target="_blank" rel="noopener">
-          <img decoding="async" class="" style="height: 34px; width: 123px;" src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee">
-        </a>
-
-      </p>
-    </section>
-
-    <section class="section bottom-divider">
-      <section class="sub-section">
-        <div class="column" id="file-input-column">
-          <h2 class="sub-section-title">1. Select image</h2>
-          <div class="note upload-note">All processing is done locally in your browser; your images are not uploaded or stored anywhere online.</div>
-          <input type="file" id="file-input" name="file-input" multiple/><br />
-          <button type="button" id="clear-all-button" onclick="clearAll()" style="display:none; background:#c0392b; margin-top:6px;">Clear all files</button>
-          <div id="sort-controls" style="display:none; margin-top:8px;">
-            <label style="font-size:.9em;">
-              <input type="checkbox" id="auto-sort-name" />
-              Auto sort by filename
-            </label>
-            <button type="button" onclick="sortImagesByName()" style="margin-left:8px;">Sort A→Z</button>
-          </div>
-        </div>
-        <div class="column column-center">
-          <h2 class="sub-section-title">or</h2>
-        </div>
-        <div class="column column-right">
-          <h2 class="sub-section-title">1. Paste byte array</h2>
-          <textarea id="byte-input" class="byte-input"></textarea><br />
-          <div class="text-input-size">
-            <input type="number" min="0" id="text-input-width" class="size-input" value="128" /> x
-            <input type="number" min="0" id="text-input-height" class="size-input" value="64" /> px
-          </div>
-          <div>
-            <button onclick="handleTextInput('horizontal')">Read as horizontal</button>
-            <button onclick="handleTextInput('vertical')">Read as vertical</button>
-          </div>
-          <div class="note">Read images appear at step 3 below</div>
-        </div>
+  <head>
+    <meta charset="UTF-8" />
+    <title>image2cpp</title>
+    <script src="./js/dithering.js" defer></script>
+    <script src="./js/script.js" defer></script>
+    <link rel="stylesheet" href="./css/style.css" />
+  </head>
+  <body>
+    <div class="wrapper">
+      <section class="section">
+        <h1>image2cpp</h1>
+        <p>
+          <strong>image2cpp</strong> is a simple tool to change images into byte
+          arrays (or arrays back into an images) for use with (monochrome)
+          displays such as OLEDs on your Arduino or Raspberry Pi.<br />
+          It was originally made to work with the Adafruit OLED library (for
+          which your can find an example sketch for Arduino
+          <a
+            href="https://github.com/javl/image2cpp/blob/master/oled_example/oled_example.ino"
+            target="_blank"
+            >here</a
+          >) but has been expanded by the community to be useful in all kind of
+          (embedded) projects.
+        </p>
+        <p>
+          More info (and credits) can be found in the
+          <a href="https://github.com/javl/image2cpp" target="_blank"
+            >Github repository</a
+          >. This is also where you can report any
+          <a href="https://github.com/javl/image2cpp/issues" target="_blank"
+            >issues</a
+          >
+          you might come across.
+        </p>
+        <p class="sp-block">
+          Did you find this tool useful? Feel free to support my open source
+          software on Github, especially if used commercially.<br />
+          <a href="https://github.com/sponsors/javl" target="_blank">
+            <img
+              src="https://img.shields.io/github/sponsors/javl?label=Sponsor&logo=GitHub"
+              alt="GitHub Sponsor"
+            />
+          </a>
+          <a
+            href="https://www.buymeacoffee.com/javl"
+            target="_blank"
+            rel="noopener"
+          >
+            <img
+              decoding="async"
+              class=""
+              style="height: 34px; width: 123px"
+              src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+              alt="Buy Me A Coffee"
+            />
+          </a>
+        </p>
       </section>
-    </section>
 
-    <section class="section bottom-divider">
-      <h2>2. Image Settings</h2>
-      <section class="sub-section">
-        <div class="table">
-
-          <div class="table-row">
-            <div class="table-cell"><label>Canvas size(s): </label></div>
-            <div class="table-cell">
-              <ul id="image-size-settings"></ul>
-              <div id="only-images-file-error" class="msg error-msg">Only images file type are allowed</div>
-              <div class="no-file-selected" class="msg">No files selected</div>
-              <button id="all-same-size" onclick="allSameSize()">Apply first image size to all images</button>
+      <section class="section bottom-divider">
+        <section class="sub-section">
+          <div class="column" id="file-input-column">
+            <h2 class="sub-section-title">1. Select image</h2>
+            <div class="note upload-note">
+              All processing is done locally in your browser; your images are
+              not uploaded or stored anywhere online.
+            </div>
+            <input
+              type="file"
+              id="file-input"
+              name="file-input"
+              multiple
+            /><br />
+            <div id="sort-controls" style="display: none; margin-top: 8px">
+              <label style="font-size: 0.9em">
+                <input type="checkbox" id="auto-sort-name" />
+                Auto sort by filename
+              </label>
+              <button
+                type="button"
+                onclick="sortImagesByName()"
+                style="margin-left: 8px"
+              >
+                Sort A→Z
+              </button>
             </div>
           </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label>Background color:</label></div>
-            <div class="table-cell">
-              <input id="backgroundColorWhite" type="radio" name="backgroundColor" value="white" checked="checked" onchange="updateRadio('backgroundColor')"/>
-              <label for="backgroundColorWhite" class="smallLabel">White</label>
-              <input id="backgroundColorBlack" type="radio" name="backgroundColor" value="black" onchange="updateRadio('backgroundColor')"/>
-              <label for="backgroundColorBlack" class="smallLabel">Black</label>
-              <input id="backgroundColorTransparent" type="radio" name="backgroundColor" value="transparent" onchange="updateRadio('backgroundColor')"/>
-              <label for="backgroundColorTransparent" class="smallLabel">Transparent</label>
-            </div>
+          <div class="column column-center">
+            <h2 class="sub-section-title">or</h2>
           </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label>Color mode:</label></div>
-            <div class="table-cell">
-              <input type="radio" id="colorModeMonochrome" name="colorMode" value="monochrome" onchange="updateColorMode(this)" checked />
-              <label for="colorModeMonochrome">Monochrome (1-bit)</label>
-              <input type="radio" id="colorModeRgb565" name="colorMode" value="rgb565" onchange="updateColorMode(this)" />
-              <label for="colorModeRgb565">RGB565 (16-bit color)</label>
-              <div class="note"><i>RGB565 forces draw mode to Horizontal 565 and shows color preview.</i></div>
+          <div class="column column-right">
+            <h2 class="sub-section-title">1. Paste byte array</h2>
+            <div class="note" style="margin-bottom: 6px">
+              Or load from a <strong>.h / .c</strong> file:
             </div>
-          </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label for="invertColors">Invert image colors</label></div>
-            <div class="table-cell">
-              <input id="invertColors" type="checkbox" onchange="updateBoolean('invertColors')" />
+            <input
+              type="file"
+              id="h-file-input"
+              accept=".h,.c"
+              onchange="handleHFileInput(event)"
+              style="margin-bottom: 8px"
+            /><br />
+            <textarea
+              id="byte-input"
+              class="byte-input"
+              placeholder="Paste byte array here, comments (// and /* */) are handled automatically"
+            ></textarea
+            ><br />
+            <div class="text-input-size">
+              <input
+                type="number"
+                min="0"
+                id="text-input-width"
+                class="size-input"
+                value="128"
+              />
+              x
+              <input
+                type="number"
+                min="0"
+                id="text-input-height"
+                class="size-input"
+                value="64"
+              />
+              px
             </div>
+            <div>
+              <button onclick="handleTextInput('horizontal')">
+                Read as horizontal
+              </button>
+              <button onclick="handleTextInput('vertical')">
+                Read as vertical
+              </button>
+            </div>
+            <div class="note">Read images appear at step 3 below</div>
           </div>
+        </section>
+      </section>
 
-          <div class="table-row" id="dithering-row">
-            <div class="table-cell"><label for="ditheringMode">Dithering: </label></div>
-            <div class="table-cell">
-              <select id="ditheringMode" onchange="updateInteger('ditheringMode')">
+      <section class="section bottom-divider">
+        <h2>2. Image Settings</h2>
+        <section class="sub-section">
+          <div class="table">
+            <div class="table-row">
+              <div class="table-cell"><label>Canvas size(s): </label></div>
+              <div class="table-cell">
+                <ul id="image-size-settings"></ul>
+                <div id="only-images-file-error" class="msg error-msg">
+                  Only images file type are allowed
+                </div>
+                <div class="no-file-selected" class="msg">
+                  No files selected
+                </div>
+                <button id="all-same-size" onclick="allSameSize()">
+                  Apply first image size to all images
+                </button>
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell"><label>Background color:</label></div>
+              <div class="table-cell">
+                <input
+                  id="backgroundColorWhite"
+                  type="radio"
+                  name="backgroundColor"
+                  value="white"
+                  checked="checked"
+                  onchange="updateRadio('backgroundColor')"
+                />
+                <label for="backgroundColorWhite" class="smallLabel"
+                  >White</label
+                >
+                <input
+                  id="backgroundColorBlack"
+                  type="radio"
+                  name="backgroundColor"
+                  value="black"
+                  onchange="updateRadio('backgroundColor')"
+                />
+                <label for="backgroundColorBlack" class="smallLabel"
+                  >Black</label
+                >
+                <input
+                  id="backgroundColorTransparent"
+                  type="radio"
+                  name="backgroundColor"
+                  value="transparent"
+                  onchange="updateRadio('backgroundColor')"
+                />
+                <label for="backgroundColorTransparent" class="smallLabel"
+                  >Transparent</label
+                >
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell"><label>Color mode:</label></div>
+              <div class="table-cell">
+                <input
+                  type="radio"
+                  id="colorModeMonochrome"
+                  name="colorMode"
+                  value="monochrome"
+                  onchange="updateColorMode(this)"
+                  checked
+                />
+                <label for="colorModeMonochrome">Monochrome (1-bit)</label>
+                <input
+                  type="radio"
+                  id="colorModeRgb565"
+                  name="colorMode"
+                  value="rgb565"
+                  onchange="updateColorMode(this)"
+                />
+                <label for="colorModeRgb565">RGB565 (16-bit color)</label>
+                <div class="note">
+                  <i
+                    >RGB565 forces draw mode to Horizontal 565 and shows color
+                    preview.</i
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell">
+                <label for="invertColors">Invert image colors</label>
+              </div>
+              <div class="table-cell">
+                <input
+                  id="invertColors"
+                  type="checkbox"
+                  onchange="updateBoolean('invertColors')"
+                />
+              </div>
+            </div>
+
+            <div class="table-row" id="dithering-row">
+              <div class="table-cell">
+                <label for="ditheringMode">Dithering: </label>
+              </div>
+              <div class="table-cell">
+                <select
+                  id="ditheringMode"
+                  onchange="updateInteger('ditheringMode')"
+                >
                   <option value="0">Binary</option>
                   <option value="1">Bayer</option>
                   <option value="2">Floyd-Steinberg</option>
                   <option value="3">Atkinson</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label for="ditheringThreshold">Brightness / alpha threshold: </label></div>
-            <div class="table-cell">
-              <input id="ditheringThreshold" class="size-input" type="number" min="0" max="255" name="ditheringThreshold" oninput="updateInteger('ditheringThreshold')" value="128"/>
-              <div class="note">
-                <i>0 - 255; if the brightness of a pixel is above the given level the pixel becomes white, otherwise they become black. When using alpha, opaque and transparent are used instead.</i></div>
-            </div>
-          </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label for="scale">Scaling:</label></div>
-            <div class="table-cell">
-              <select id="scale" name="scale" onchange="updateInteger('scale')">
-                <option value="1">original size</option>
-                <option value="2">scale to fit, keeping proportions</option>
-                <option value="3">stretch to fill canvas</option>
-                <option value="4">stretch to fill canvas horizontally</option>
-                <option value="5">stretch to fill canvas vertically</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label>Center image:</label></div>
-            <div class="table-cell">
-              <input id="centerHorizontally" type="checkbox" onchange="updateBoolean('centerHorizontally')" />
-              <label for="centerHorizontally">horizontally</label>
-              <input id="centerVertically" type="checkbox" onchange="updateBoolean('centerVertically')" />
-              <label for="centerVertically">vertically</label>
-            </div>
-          </div>
-
-          <div class="table-row">
-            <div class="table-cell"></div>
-            <div class="table-cell">
-              <i class="note">Centering the image only works when using a canvas larger than the original image.</i>
-            </div>
-          </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label for="rotation">Rotate image:</label></div>
-            <div class="table-cell">
-              <select id="rotation" name="rotation" onchange="updateInteger('rotation')">
-                <option value="0">0</option>
-                <option value="90">90</option>
-                <option value="180">180</option>
-                <option value="270">270</option>
-              </select>
-              <label for="rotation">degrees</label>
-            </div>
-          </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label>Flip image:</label></div>
-            <div class="table-cell">
-              <input id="flipHorizontally" type="checkbox" onchange="updateBoolean('flipHorizontally')" />
-              <label for="flipHorizontally">horizontally</label>
-              <input id="flipVertically" type="checkbox" onchange="updateBoolean('flipVertically')" />
-              <label for="flipVertically">vertically</label>
-            </div>
-          </div>
-
-        </div>
-      </section>
-    </section>
-
-    <section class="section bottom-divider">
-      <h2>3. Preview</h2>
-      <section class="sub-section">
-        <div class="no-file-selected" class="msg">No files selected</div>
-        <div id="images-canvas-container"></div>
-      </section>
-    </section>
-
-    <section class="section">
-      <h2>4. Output</h2>
-      <section class="sub-section">
-        <div class="table">
-          <div class="table-row">
-            <div class="table-cell"><label for="outputFormat">Code output format</label></div>
-            <div class="table-cell">
-              <select id="outputFormat" name="outputFormat" onchange="updateOutputFormat(this)">
-                <option value="plain">Plain bytes</option>
-                <option value="arduino">Arduino code</option>
-                <option value="arduino_single">Arduino code, single bitmap</option>
-                <option value="adafruit_gfx">Adafruit GFXbitmapFont</option>
-              </select>
-              <div id="format-caption-container">
-                <div data-caption="arduino">
-                  Adds some extra Arduino code around the output for easy copy-paste into
-                  <a href="https://github.com/javl/image2cpp/blob/master/oled_example/oled_example.ino" target="_blank">this example</a>.
-                  If multiple images are loaded, generates a byte array for each and appends a counter to the identifier.
-                </div>
-                <div data-caption="arduino_single">
-                  Adds some extra Arduino code around the output for easy copy-paste.
-                  If multiple images are loaded, generates a single byte array.
-                </div>
-                <div data-caption="adafruit_gfx">
-                  Creates a <code>GFXbitmapFont</code> formatted ouput. Used by a modified version of the Adafruit GFX library.
-                  GitHub project and example <a href="https://github.com/wiredolphin/Adafruit-GFX-Library/tree/bitmap-font" target="_blank">here</a>.
-                  <br />
-                  <i>First ASCII character</i> value is used only if a glyph identifier of length equal to 1 is not provided for each image. The value itself will be incremented by 1 for each glyph.
-                </div>
+                </select>
               </div>
-              <div id="extra-settings-container">
-                <div id="adafruit-gfx-settings" class="table nested-table">
-                  <div class="table-row">
-                    <div class="table-cell"><label>First ASCII character (dec):</label></div>
-                    <div class="table-cell">
-                      <input id="first-ascii-char" class="text-input" type="text" name="first-ascii-char" onchange="" value="48"/>
-                    </div>
-                  </div>
-                  <div class="table-row">
-                    <div class="table-cell"><label>x advance:</label></div>
-                    <div class="table-cell">
-                      <input id="x-advance" class="text-input" type="text" name="x-advance" onchange="" value="0"/>
-                    </div>
-                  </div>
-                </div>
-                <div id="arduino-identifier" class="table nested-table">
-                  <div class="table-row">
-                    <div class="table-cell"><label>Identifier/Prefix:</label></div>
-                    <div class="table-cell">
-                      <input id="identifier" class="text-input" type="text" name="identifier" onchange="" value="epd_bitmap_"/>
-                    </div>
-                  </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell">
+                <label for="ditheringThreshold"
+                  >Brightness / alpha threshold:
+                </label>
+              </div>
+              <div class="table-cell">
+                <input
+                  id="ditheringThreshold"
+                  class="size-input"
+                  type="number"
+                  min="0"
+                  max="255"
+                  name="ditheringThreshold"
+                  oninput="updateInteger('ditheringThreshold')"
+                  value="128"
+                />
+                <div class="note">
+                  <i
+                    >0 - 255; if the brightness of a pixel is above the given
+                    level the pixel becomes white, otherwise they become black.
+                    When using alpha, opaque and transparent are used
+                    instead.</i
+                  >
                 </div>
               </div>
             </div>
-          </div>
 
-          <div class="table-row">
-            <div class="table-cell"><label>Draw mode:</label></div>
-            <div class="table-cell">
-              <select id="drawMode" name="drawMode" onchange="updateDrawMode(this)">
-                <option value="horizontal1bit">Horizontal - 1 bit per pixel</option>
-                <option value="vertical1bit">Vertical - 1 bit per pixel</option>
-                <option value="horizontal565">Horizontal - 2 bytes per pixel (565)</option>
-                <option value="horizontalAlpha">Horizontal - 1 bit per pixel alpha map</option>
-                <option value="horizontal888">Horizontal - 3 bytes per pixel (rgb888)</option>
-              </select>
-
-              <div class="note">
-                <i>If your image looks all messed up on your display, like the image below, try using a different mode.</i>
+            <div class="table-row">
+              <div class="table-cell"><label for="scale">Scaling:</label></div>
+              <div class="table-cell">
+                <select
+                  id="scale"
+                  name="scale"
+                  onchange="updateInteger('scale')"
+                >
+                  <option value="1">original size</option>
+                  <option value="2">scale to fit, keeping proportions</option>
+                  <option value="3">stretch to fill canvas</option>
+                  <option value="4">stretch to fill canvas horizontally</option>
+                  <option value="5">stretch to fill canvas vertically</option>
+                </select>
               </div>
-              <img class="inlineImg"
-                src="data:image/jpeg;base64,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"
-              width="150" height="64" alt="" />
+            </div>
 
+            <div class="table-row">
+              <div class="table-cell"><label>Center image:</label></div>
+              <div class="table-cell">
+                <input
+                  id="centerHorizontally"
+                  type="checkbox"
+                  onchange="updateBoolean('centerHorizontally')"
+                />
+                <label for="centerHorizontally">horizontally</label>
+                <input
+                  id="centerVertically"
+                  type="checkbox"
+                  onchange="updateBoolean('centerVertically')"
+                />
+                <label for="centerVertically">vertically</label>
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell"></div>
+              <div class="table-cell">
+                <i class="note"
+                  >Centering the image only works when using a canvas larger
+                  than the original image.</i
+                >
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell">
+                <label for="rotation">Rotate image:</label>
+              </div>
+              <div class="table-cell">
+                <select
+                  id="rotation"
+                  name="rotation"
+                  onchange="updateInteger('rotation')"
+                >
+                  <option value="0">0</option>
+                  <option value="90">90</option>
+                  <option value="180">180</option>
+                  <option value="270">270</option>
+                </select>
+                <label for="rotation">degrees</label>
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell"><label>Flip image:</label></div>
+              <div class="table-cell">
+                <input
+                  id="flipHorizontally"
+                  type="checkbox"
+                  onchange="updateBoolean('flipHorizontally')"
+                />
+                <label for="flipHorizontally">horizontally</label>
+                <input
+                  id="flipVertically"
+                  type="checkbox"
+                  onchange="updateBoolean('flipVertically')"
+                />
+                <label for="flipVertically">vertically</label>
+              </div>
             </div>
           </div>
-
-          <div class="table-row">
-            <div class="table-cell"><label for="bitswap">Swap bits in byte:</label></div>
-            <div class="table-cell">
-              <input id="bitswap" type="checkbox" onchange="updateBoolean('bitswap')">
-              <label for="bitswap">swap</label>
-            </div>
-          </div>
-
-          <div class="table-row">
-            <div class="table-cell"></div>
-            <div class="table-cell">
-              <i class="note">Useful when working with the u8g2 library.</i>
-            </div>
-          </div>
-
-
-          <div class="table-row" id="remove-zeroes-commas-container">
-            <div class="table-cell"><label>Extra formatting options:</label></div>
-            <div class="table-cell">
-              <input id="removeZeroesCommas" type="checkbox" onchange="updateBoolean('removeZeroesCommas')"/>
-              <label for="removeZeroesCommas">Remove '0x' and commas from output</label>
-            </div>
-          </div>
-        </div>
-
+        </section>
       </section>
 
-      <section class="sub-section">
-        <button type="button" class="generate-button" onclick="generateOutputString()">Generate code</button>
-        <button type="button" id = "copy-button" onclick="copyOutput()">Copy Output</button>
-        <button type="button" id = "download-button" onclick="downloadBinFile()">Download as binary file (.bin)</button>
-        <button type="button" id="download-c-button" onclick="downloadCFile()">Download as .c file</button>
-        <button type="button" id="download-h-button" onclick="downloadHFile()">Download as .h file</button>
-        <textarea id="code-output" class="code-output"></textarea>
+      <section class="section bottom-divider">
+        <h2>3. Preview</h2>
+        <section class="sub-section">
+          <div class="no-file-selected" class="msg">No files selected</div>
+          <div id="images-canvas-container"></div>
+        </section>
       </section>
-    </section>
-  </div>
 
-</body>
+      <section class="section">
+        <h2>4. Output</h2>
+        <section class="sub-section">
+          <div class="table">
+            <div class="table-row">
+              <div class="table-cell">
+                <label for="outputFormat">Code output format</label>
+              </div>
+              <div class="table-cell">
+                <select
+                  id="outputFormat"
+                  name="outputFormat"
+                  onchange="updateOutputFormat(this)"
+                >
+                  <option value="plain">Plain bytes</option>
+                  <option value="arduino">Arduino code</option>
+                  <option value="arduino_single">
+                    Arduino code, single bitmap
+                  </option>
+                  <option value="adafruit_gfx">Adafruit GFXbitmapFont</option>
+                </select>
+                <div id="format-caption-container">
+                  <div data-caption="arduino">
+                    Adds some extra Arduino code around the output for easy
+                    copy-paste into
+                    <a
+                      href="https://github.com/javl/image2cpp/blob/master/oled_example/oled_example.ino"
+                      target="_blank"
+                      >this example</a
+                    >. If multiple images are loaded, generates a byte array for
+                    each and appends a counter to the identifier.
+                  </div>
+                  <div data-caption="arduino_single">
+                    Adds some extra Arduino code around the output for easy
+                    copy-paste. If multiple images are loaded, generates a
+                    single byte array.
+                  </div>
+                  <div data-caption="adafruit_gfx">
+                    Creates a <code>GFXbitmapFont</code> formatted ouput. Used
+                    by a modified version of the Adafruit GFX library. GitHub
+                    project and example
+                    <a
+                      href="https://github.com/wiredolphin/Adafruit-GFX-Library/tree/bitmap-font"
+                      target="_blank"
+                      >here</a
+                    >.
+                    <br />
+                    <i>First ASCII character</i> value is used only if a glyph
+                    identifier of length equal to 1 is not provided for each
+                    image. The value itself will be incremented by 1 for each
+                    glyph.
+                  </div>
+                </div>
+                <div id="extra-settings-container">
+                  <div id="adafruit-gfx-settings" class="table nested-table">
+                    <div class="table-row">
+                      <div class="table-cell">
+                        <label>First ASCII character (dec):</label>
+                      </div>
+                      <div class="table-cell">
+                        <input
+                          id="first-ascii-char"
+                          class="text-input"
+                          type="text"
+                          name="first-ascii-char"
+                          onchange=""
+                          value="48"
+                        />
+                      </div>
+                    </div>
+                    <div class="table-row">
+                      <div class="table-cell"><label>x advance:</label></div>
+                      <div class="table-cell">
+                        <input
+                          id="x-advance"
+                          class="text-input"
+                          type="text"
+                          name="x-advance"
+                          onchange=""
+                          value="0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div id="arduino-identifier" class="table nested-table">
+                    <div class="table-row">
+                      <div class="table-cell">
+                        <label>Identifier/Prefix:</label>
+                      </div>
+                      <div class="table-cell">
+                        <input
+                          id="identifier"
+                          class="text-input"
+                          type="text"
+                          name="identifier"
+                          onchange=""
+                          value="epd_bitmap_"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell"><label>Draw mode:</label></div>
+              <div class="table-cell">
+                <select
+                  id="drawMode"
+                  name="drawMode"
+                  onchange="updateDrawMode(this)"
+                >
+                  <option value="horizontal1bit">
+                    Horizontal - 1 bit per pixel
+                  </option>
+                  <option value="vertical1bit">
+                    Vertical - 1 bit per pixel
+                  </option>
+                  <option value="horizontal565">
+                    Horizontal - 2 bytes per pixel (565)
+                  </option>
+                  <option value="horizontalAlpha">
+                    Horizontal - 1 bit per pixel alpha map
+                  </option>
+                  <option value="horizontal888">
+                    Horizontal - 3 bytes per pixel (rgb888)
+                  </option>
+                </select>
+
+                <div class="note">
+                  <i
+                    >If your image looks all messed up on your display, like the
+                    image below, try using a different mode.</i
+                  >
+                </div>
+                <img
+                  class="inlineImg"
+                  src="data:image/jpeg;base64,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"
+                  width="150"
+                  height="64"
+                  alt=""
+                />
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell">
+                <label for="bitswap">Swap bits in byte:</label>
+              </div>
+              <div class="table-cell">
+                <input
+                  id="bitswap"
+                  type="checkbox"
+                  onchange="updateBoolean('bitswap')"
+                />
+                <label for="bitswap">swap</label>
+              </div>
+            </div>
+
+            <div class="table-row">
+              <div class="table-cell"></div>
+              <div class="table-cell">
+                <i class="note">Useful when working with the u8g2 library.</i>
+              </div>
+            </div>
+
+            <div class="table-row" id="remove-zeroes-commas-container">
+              <div class="table-cell">
+                <label>Extra formatting options:</label>
+              </div>
+              <div class="table-cell">
+                <input
+                  id="removeZeroesCommas"
+                  type="checkbox"
+                  onchange="updateBoolean('removeZeroesCommas')"
+                />
+                <label for="removeZeroesCommas"
+                  >Remove '0x' and commas from output</label
+                >
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="sub-section">
+          <button
+            type="button"
+            class="generate-button"
+            onclick="generateOutputString()"
+          >
+            Generate code
+          </button>
+          <button type="button" id="copy-button" onclick="copyOutput()">
+            Copy Output
+          </button>
+          <button
+            type="button"
+            id="download-button"
+            onclick="downloadBinFile()"
+          >
+            Download as binary file (.bin)
+          </button>
+          <button
+            type="button"
+            id="download-c-button"
+            onclick="downloadCFile()"
+          >
+            Download as .c file
+          </button>
+          <button
+            type="button"
+            id="download-h-button"
+            onclick="downloadHFile()"
+          >
+            Download as .h file
+          </button>
+          <textarea id="code-output" class="code-output"></textarea>
+        </section>
+      </section>
+    </div>
+  </body>
 </html>

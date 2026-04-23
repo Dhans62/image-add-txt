@@ -706,6 +706,33 @@ function listToImageVertical(list, canvas) {
 
 // Handle inserting an image by pasting code
 // eslint-disable-next-line no-unused-vars
+// Parse raw text (from textarea or .h file) into a clean hex list
+function parseByteInput(raw) {
+  let input = raw;
+
+  // Remove block comments /* ... */
+  input = input.replace(/\/\*[\s\S]*?\*\//g, '');
+  // Remove line comments // ... (to end of line)
+  input = input.replace(/\/\/[^\r\n]*/g, '');
+  // Remove Arduino/C variable declarations
+  input = input.replace(/const\s+(unsigned\s+char|uint8_t|uint16_t|unsigned\s+long)\s+\w+\s*\[[\s\S]*?\]\s*(PROGMEM\s*)?=/g, '');
+  // Remove preprocessor directives
+  input = input.replace(/#[^\r\n]*/g, '');
+  // Remove braces and semicolons
+  input = input.replace(/[{};]/g, ',');
+  // Remove "0x" prefix
+  input = input.replace(/0[xX]/g, '');
+  // Collapse whitespace and newlines to commas
+  input = input.replace(/[\s\r\n]+/g, ',');
+  // Collapse multiple commas
+  input = input.replace(/,{2,}/g, ',');
+  // Trim leading/trailing commas
+  input = input.replace(/^,|,$/g, '');
+
+  return input.split(',').filter((s) => s.length > 0);
+}
+
+// eslint-disable-next-line no-unused-vars
 function handleTextInput(drawMode) {
   const canvasContainer = document.getElementById('images-canvas-container');
   const canvas = document.createElement('canvas');
@@ -723,30 +750,43 @@ function handleTextInput(drawMode) {
   const image = new Image();
   images.setByIndex(0, { img: image, canvas });
 
-  let input = document.getElementById('byte-input').value;
+  const raw = document.getElementById('byte-input').value;
+  const list = parseByteInput(raw);
 
-  // Remove Arduino code
-  input = input.replace(/const\s+(unsigned\s+char|uint8_t)\s+[a-zA-Z0-9]+\s*\[\]\s*(PROGMEM\s*)?=\s*/g, '');
-  input = input.replace(/\};|\{/g, '');
-
-  // Convert newlines to comma (helps to remove comments later)
-  input = input.replace(/\r\n|\r|\n/g, ',');
-  // Convert multiple commas in a row into a single one
-  input = input.replace(/,{2,}/g, ',');
-  // Remove whitespace
-  input = input.replace(/\s/g, '');
-  // Remove comments
-  input = input.replace(/\/\/(.+?),/g, '');
-  // Remove "0x"
-  input = input.replace(/0[xX]/g, '');
-  // Split into list
-  const list = input.split(',');
+  if (list.length === 0) {
+    alert('No valid hex data found. Check your input.');
+    return;
+  }
 
   if (drawMode === 'horizontal') {
     listToImageHorizontal(list, canvas);
   } else {
     listToImageVertical(list, canvas);
   }
+}
+
+// Handle .h file upload — read content into textarea then auto-preview
+// eslint-disable-next-line no-unused-vars
+function handleHFileInput(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target.result;
+    document.getElementById('byte-input').value = content;
+
+    // Try to detect width/height from comment e.g. "// 'name', 128x64px"
+    const sizeMatch = content.match(/(\d+)\s*x\s*(\d+)\s*px/i);
+    if (sizeMatch) {
+      document.getElementById('text-input-width').value = sizeMatch[1];
+      document.getElementById('text-input-height').value = sizeMatch[2];
+    }
+
+    // Auto-preview as horizontal
+    handleTextInput('horizontal');
+  };
+  reader.readAsText(file);
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -937,7 +977,6 @@ function handleImageSelection(evt) {
         images.last().entryKey = entryKey;
 
         document.getElementById('sort-controls').style.display = 'block';
-        document.getElementById('clear-all-button').style.display = 'inline-block';
         if (images.length() > 1) {
           document.getElementById('all-same-size').style.display = 'block';
         }
@@ -1104,27 +1143,6 @@ function generateOutputString() {
 
 // Copy the final output to the clipboard
 // eslint-disable-next-line no-unused-vars
-// eslint-disable-next-line no-unused-vars
-function clearAll() {
-  const canvasContainer = document.getElementById('images-canvas-container');
-  const imageSizeSettings = document.getElementById('image-size-settings');
-  const fileInputColumn = document.getElementById('file-input-column');
-
-  while (canvasContainer.firstChild) canvasContainer.removeChild(canvasContainer.firstChild);
-  imageSizeSettings.querySelectorAll('li').forEach((li) => imageSizeSettings.removeChild(li));
-  fileInputColumn.querySelectorAll('.file-input-entry').forEach((fe) => fileInputColumn.removeChild(fe));
-
-  while (images.length() > 0) images.remove(images.first());
-
-  document.getElementById('all-same-size').style.display = 'none';
-  document.getElementById('sort-controls').style.display = 'none';
-  document.getElementById('clear-all-button').style.display = 'none';
-  document.querySelectorAll('.no-file-selected').forEach((el) => { el.style.display = 'block'; }); // eslint-disable-line no-param-reassign
-  document.getElementById('code-output').value = '';
-  document.getElementById('copy-button').disabled = true;
-  document.getElementById('file-input').value = '';
-}
-
 function copyOutput() {
   navigator.clipboard.writeText(document.getElementById('code-output').value);
 }
