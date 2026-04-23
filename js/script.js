@@ -598,13 +598,11 @@ function listToImageHorizontal(list, canvas) {
 
   // Move the list into the imageData object
   for (let i = 0; i < list.length; i++) {
+    if (!list[i] || list[i].trim() === '') continue; // eslint-disable-line no-continue
     let binString = hexToBinary(list[i]);
     if (!binString.valid) {
-      // eslint-disable-next-line no-alert
-      alert('Something went wrong converting the string. Make sure there are no comments in your input?');
-      // eslint-disable-next-line no-console
-      console.error('invalid hexToBinary: ', binString.s);
-      return;
+      console.warn('Skipping invalid token:', binString.s); // eslint-disable-line no-console
+      continue; // eslint-disable-line no-continue
     }
     binString = binString.result;
     if (binString.length === 4) {
@@ -666,13 +664,11 @@ function listToImageVertical(list, canvas) {
 
   // Move the list into the imageData object
   for (let i = 0; i < list.length; i++) {
+    if (!list[i] || list[i].trim() === '') continue; // eslint-disable-line no-continue
     let binString = hexToBinary(list[i]);
     if (!binString.valid) {
-      // eslint-disable-next-line no-alert
-      alert('Something went wrong converting the string. Did you forget to remove any comments from the input?');
-      // eslint-disable-next-line no-console
-      console.error('invalid hexToBinary: ', binString.s);
-      return;
+      console.warn('Skipping invalid token:', binString.s); // eslint-disable-line no-console
+      continue; // eslint-disable-line no-continue
     }
     binString = binString.result;
     if (binString.length === 4) {
@@ -706,30 +702,234 @@ function listToImageVertical(list, canvas) {
 
 // Handle inserting an image by pasting code
 // eslint-disable-next-line no-unused-vars
-// Parse raw text (from textarea or .h file) into a clean hex list
+// Parse raw hex text into clean token list (strips comments, declarations, etc)
 function parseByteInput(raw) {
-  let input = raw;
+  let s = raw;
+  s = s.replace(/\/\*[\s\S]*?\*\//g, '');     // block comments
+  s = s.replace(/\/\/[^\r\n]*/g, '');          // line comments
+  s = s.replace(/#[^\r\n]*/g, '');             // preprocessor
+  s = s.replace(/const\s+[\w\s]+\s*\[[\s\S]*?\]\s*(?:PROGMEM\s*)?=/g, ''); // declarations
+  s = s.replace(/[{};]/g, ',');
+  s = s.replace(/0[xX]/g, '');
+  s = s.replace(/[\s\r\n]+/g, ',');
+  s = s.replace(/,{2,}/g, ',');
+  s = s.replace(/^,|,$/g, '');
+  return s.split(',').filter((t) => /^[0-9a-fA-F]+$/.test(t));
+}
 
-  // Remove block comments /* ... */
-  input = input.replace(/\/\*[\s\S]*?\*\//g, '');
-  // Remove line comments // ... (to end of line)
-  input = input.replace(/\/\/[^\r\n]*/g, '');
-  // Remove Arduino/C variable declarations
-  input = input.replace(/const\s+(unsigned\s+char|uint8_t|uint16_t|unsigned\s+long)\s+\w+\s*\[[\s\S]*?\]\s*(PROGMEM\s*)?=/g, '');
-  // Remove preprocessor directives
-  input = input.replace(/#[^\r\n]*/g, '');
-  // Remove braces and semicolons
-  input = input.replace(/[{};]/g, ',');
-  // Remove "0x" prefix
-  input = input.replace(/0[xX]/g, '');
-  // Collapse whitespace and newlines to commas
-  input = input.replace(/[\s\r\n]+/g, ',');
-  // Collapse multiple commas
-  input = input.replace(/,{2,}/g, ',');
-  // Trim leading/trailing commas
-  input = input.replace(/^,|,$/g, '');
+// Parse .h file into array of frame objects: [{name, width, height, tokens}]
+function parseHFileFrames(content) {
+  const frames = [];
 
-  return input.split(',').filter((s) => s.length > 0);
+  // Match each array block: optional comment with name/size, then const ... = { ... };
+  // Supports both: "const unsigned char name[] PROGMEM = {" and "const unsigned char PROGMEM name[] = {"
+  const blockRegex = /(?:\/\/\s*'([^']+)',\s*(\d+)\s*x\s*(\d+)\s*px[^\n]*)?\s*const\s+[\w\s]+?\s+(?:PROGMEM\s+)?(\w+)\s*\[[\s\S]*?\]\s*(?:PROGMEM\s*)?=\s*\{([\s\S]*?)\};/g;
+
+  let match;
+  // eslint-disable-next-line no-cond-assign
+  while ((match = blockRegex.exec(content)) !== null) {
+    const commentName = match[1] || null;
+    const commentW = match[2] ? parseInt(match[2]) : null;
+    const commentH = match[3] ? parseInt(match[3]) : null;
+    const varName = match[4];
+    const body = match[5];
+
+    // Skip the allArray variable (pointer array, not bitmap data)
+    if (/allArray|_LEN/.test(varName)) continue; // eslint-disable-line no-continue
+
+    const tokens = parseByteInput(body);
+    if (tokens.length === 0) continue; // eslint-disable-line no-continue
+
+    frames.push({
+      name: commentName || varName,
+      width: commentW,
+      height: commentH,
+      tokens,
+    });
+  }
+  return frames;
+}
+
+// Create a canvas+image entry for one frame and add it to the page (like handleImageSelection does)
+function addFrameToPage(frameName, width, height, tokens, drawMode) {
+  const canvasContainer = document.getElementById('images-canvas-container');
+  const imageSizeSettings = document.getElementById('image-size-settings');
+  const fileInputColumn = document.getElementById('file-input-column');
+  const noFileSelected = document.querySelectorAll('.no-file-selected');
+
+  noFileSelected.forEach((el) => { el.style.display = 'none'; }); // eslint-disable-line no-param-reassign
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const glyphName = frameName.replace(/[^a-zA-Z0-9_]/g, '_');
+  const entryKey = `${glyphName}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+  // ── file-input-column entry ──────────────────────────────────────────────
+  const fileInputColumnEntry = document.createElement('div');
+  fileInputColumnEntry.className = 'file-input-entry';
+  fileInputColumnEntry.setAttribute('data-key', entryKey);
+
+  const label = document.createElement('span');
+  label.textContent = frameName;
+  const removeBtn1 = document.createElement('button');
+  removeBtn1.className = 'remove-button';
+  removeBtn1.innerHTML = 'remove';
+
+  // ── image-size li ────────────────────────────────────────────────────────
+  const imageEntry = document.createElement('li');
+  imageEntry.setAttribute('data-img', frameName);
+  imageEntry.setAttribute('data-key', entryKey);
+  imageEntry.draggable = true;
+  imageEntry.style.cursor = 'grab';
+
+  const wInput = document.createElement('input');
+  wInput.type = 'number'; wInput.name = 'width'; wInput.min = 0;
+  wInput.className = 'size-input'; wInput.value = width;
+  wInput.oninput = () => { canvas.width = parseInt(wInput.value); updateAllImages(); };
+
+  const hInput = document.createElement('input');
+  hInput.type = 'number'; hInput.name = 'height'; hInput.min = 0;
+  hInput.className = 'size-input'; hInput.value = height;
+  hInput.oninput = () => { canvas.height = parseInt(hInput.value); updateAllImages(); };
+
+  const fn = document.createElement('span');
+  fn.className = 'file-info';
+  fn.innerHTML = `${frameName} (${width} x ${height})<br />`;
+
+  const gi = document.createElement('input');
+  gi.type = 'text'; gi.name = 'glyph'; gi.className = 'glyph-input';
+
+  const gil = document.createElement('span');
+  gil.innerHTML = 'glyph'; gil.className = 'file-info';
+
+  const rb = document.createElement('button');
+  rb.className = 'remove-button'; rb.innerHTML = 'remove';
+
+  const btnUp = document.createElement('button');
+  btnUp.className = 'order-button'; btnUp.innerHTML = '▲'; btnUp.title = 'Move up';
+  btnUp.onclick = () => { moveImage(images.get(img), -1); }; // eslint-disable-line no-use-before-define
+
+  const btnDown = document.createElement('button');
+  btnDown.className = 'order-button'; btnDown.innerHTML = '▼'; btnDown.title = 'Move down';
+  btnDown.onclick = () => { moveImage(images.get(img), 1); }; // eslint-disable-line no-use-before-define
+
+  const removeButtonOnClick = () => {
+    const image = images.get(img); // eslint-disable-line no-use-before-define
+    canvasContainer.removeChild(image.canvas);
+    images.remove(image);
+    imageSizeSettings.removeChild(imageEntry);
+    fileInputColumn.removeChild(fileInputColumnEntry);
+    if (imageSizeSettings.querySelectorAll('li[data-key]').length <= 1) {
+      document.getElementById('all-same-size').style.display = 'none';
+    }
+    if (images.length() === 0) {
+      noFileSelected.forEach((el) => { el.style.display = 'block'; }); // eslint-disable-line no-param-reassign
+      document.getElementById('sort-controls').style.display = 'none';
+      document.getElementById('clear-all-button').style.display = 'none';
+    }
+    updateAllImages();
+  };
+  rb.onclick = removeButtonOnClick;
+  removeBtn1.onclick = removeButtonOnClick;
+
+  // drag-and-drop
+  imageEntry.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', entryKey);
+    imageEntry.classList.add('dragging');
+  });
+  imageEntry.addEventListener('dragend', () => {
+    imageEntry.classList.remove('dragging');
+    imageSizeSettings.querySelectorAll('li').forEach((li) => li.classList.remove('drag-over'));
+  });
+  imageEntry.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    imageSizeSettings.querySelectorAll('li').forEach((li) => li.classList.remove('drag-over'));
+    imageEntry.classList.add('drag-over');
+  });
+  imageEntry.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const fromKey = e.dataTransfer.getData('text/plain');
+    if (fromKey === entryKey) return;
+    let fromIdx = -1; let toIdx = -1;
+    for (let k = 0; k < images.length(); k++) {
+      if (images.getByIndex(k).entryKey === fromKey) fromIdx = k;
+      if (images.getByIndex(k).entryKey === entryKey) toIdx = k;
+    }
+    if (fromIdx === -1 || toIdx === -1) return;
+    images.move(fromIdx, toIdx);
+    syncDomOrder();
+    imageEntry.classList.remove('drag-over');
+  });
+
+  fileInputColumnEntry.appendChild(label);
+  fileInputColumnEntry.appendChild(removeBtn1);
+  fileInputColumn.appendChild(fileInputColumnEntry);
+
+  imageEntry.appendChild(fn);
+  imageEntry.appendChild(wInput);
+  imageEntry.appendChild(document.createTextNode(' x '));
+  imageEntry.appendChild(hInput);
+  imageEntry.appendChild(gil);
+  imageEntry.appendChild(gi);
+  imageEntry.appendChild(btnUp);
+  imageEntry.appendChild(btnDown);
+  imageEntry.appendChild(rb);
+  imageSizeSettings.appendChild(imageEntry);
+
+  canvasContainer.appendChild(canvas);
+
+  const img = new Image();
+  images.push(img, canvas, glyphName);
+  images.last().entryKey = entryKey;
+
+  // Draw frame onto canvas
+  settings.screenWidth = width;
+  settings.screenHeight = height;
+  if (drawMode === 'vertical') {
+    listToImageVertical(tokens, canvas);
+  } else {
+    listToImageHorizontal(tokens, canvas);
+  }
+
+  gi.onchange = () => { const image = images.get(img); image.glyph = gi.value; };
+
+  if (images.length() > 1) {
+    document.getElementById('all-same-size').style.display = 'block';
+  }
+  document.getElementById('sort-controls').style.display = 'block';
+  document.getElementById('clear-all-button').style.display = 'inline-block';
+}
+
+// Handle .h / .c file upload → parse each array as a separate frame
+// eslint-disable-next-line no-unused-vars
+function handleHFileInput(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target.result;
+    document.getElementById('byte-input').value = content;
+
+    const frames = parseHFileFrames(content);
+    if (frames.length === 0) {
+      // eslint-disable-next-line no-alert
+      alert('No bitmap arrays found in file.');
+      return;
+    }
+
+    // Use width/height from first frame that has it, fallback to input fields
+    const defaultW = parseInt(document.getElementById('text-input-width').value);
+    const defaultH = parseInt(document.getElementById('text-input-height').value);
+
+    frames.forEach((frame) => {
+      const w = frame.width || defaultW;
+      const h = frame.height || defaultH;
+      addFrameToPage(frame.name, w, h, frame.tokens, 'horizontal');
+    });
+  };
+  reader.readAsText(file);
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -750,11 +950,10 @@ function handleTextInput(drawMode) {
   const image = new Image();
   images.setByIndex(0, { img: image, canvas });
 
-  const raw = document.getElementById('byte-input').value;
-  const list = parseByteInput(raw);
-
+  const list = parseByteInput(document.getElementById('byte-input').value);
   if (list.length === 0) {
-    alert('No valid hex data found. Check your input.');
+    // eslint-disable-next-line no-alert
+    alert('No valid hex data found.');
     return;
   }
 
@@ -765,28 +964,26 @@ function handleTextInput(drawMode) {
   }
 }
 
-// Handle .h file upload — read content into textarea then auto-preview
 // eslint-disable-next-line no-unused-vars
-function handleHFileInput(evt) {
-  const file = evt.target.files[0];
-  if (!file) return;
+function clearAll() {
+  const canvasContainer = document.getElementById('images-canvas-container');
+  const imageSizeSettings = document.getElementById('image-size-settings');
+  const fileInputColumn = document.getElementById('file-input-column');
 
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const content = e.target.result;
-    document.getElementById('byte-input').value = content;
+  while (canvasContainer.firstChild) canvasContainer.removeChild(canvasContainer.firstChild);
+  imageSizeSettings.querySelectorAll('li').forEach((li) => imageSizeSettings.removeChild(li));
+  fileInputColumn.querySelectorAll('.file-input-entry').forEach((fe) => fileInputColumn.removeChild(fe));
+  while (images.length() > 0) images.remove(images.first());
 
-    // Try to detect width/height from comment e.g. "// 'name', 128x64px"
-    const sizeMatch = content.match(/(\d+)\s*x\s*(\d+)\s*px/i);
-    if (sizeMatch) {
-      document.getElementById('text-input-width').value = sizeMatch[1];
-      document.getElementById('text-input-height').value = sizeMatch[2];
-    }
-
-    // Auto-preview as horizontal
-    handleTextInput('horizontal');
-  };
-  reader.readAsText(file);
+  document.getElementById('all-same-size').style.display = 'none';
+  document.getElementById('sort-controls').style.display = 'none';
+  document.getElementById('clear-all-button').style.display = 'none';
+  document.querySelectorAll('.no-file-selected').forEach((el) => { el.style.display = 'block'; }); // eslint-disable-line no-param-reassign
+  document.getElementById('code-output').value = '';
+  document.getElementById('copy-button').disabled = true;
+  document.getElementById('file-input').value = '';
+  document.getElementById('h-file-input').value = '';
+  document.getElementById('byte-input').value = '';
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -977,6 +1174,7 @@ function handleImageSelection(evt) {
         images.last().entryKey = entryKey;
 
         document.getElementById('sort-controls').style.display = 'block';
+        document.getElementById('clear-all-button').style.display = 'inline-block';
         if (images.length() > 1) {
           document.getElementById('all-same-size').style.display = 'block';
         }

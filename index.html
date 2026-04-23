@@ -73,6 +73,14 @@
               name="file-input"
               multiple
             /><br />
+            <button
+              type="button"
+              id="clear-all-button"
+              onclick="clearAll()"
+              style="display: none; background: #c0392b; margin-top: 6px"
+            >
+              Clear all files
+            </button>
             <div id="sort-controls" style="display: none; margin-top: 8px">
               <label style="font-size: 0.9em">
                 <input type="checkbox" id="auto-sort-name" />
@@ -93,19 +101,20 @@
           <div class="column column-right">
             <h2 class="sub-section-title">1. Paste byte array</h2>
             <div class="note" style="margin-bottom: 6px">
-              Or load from a <strong>.h / .c</strong> file:
+              Or load from a <strong>.h / .c</strong> file — each array becomes
+              a separate frame:
             </div>
             <input
               type="file"
               id="h-file-input"
               accept=".h,.c"
               onchange="handleHFileInput(event)"
-              style="margin-bottom: 8px"
+              style="margin-bottom: 6px"
             /><br />
             <textarea
               id="byte-input"
               class="byte-input"
-              placeholder="Paste byte array here, comments (// and /* */) are handled automatically"
+              placeholder="Paste byte array here — comments (// and /* */) handled automatically"
             ></textarea
             ><br />
             <div class="text-input-size">
